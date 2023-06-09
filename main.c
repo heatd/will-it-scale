@@ -14,12 +14,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#if HAVE_HWLOC
 #include <hwloc.h>
+#endif
 #include <sys/types.h>
 #include <signal.h>
 #include <poll.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #define MAX_TASKS 2048
 #define MAX_CACHELINE_SIZE 256
@@ -82,8 +85,10 @@ struct args
 	unsigned long long *arg1;
 	unsigned long arg2;
 	int poll_fd;
+#if HAVE_HWLOC
 	hwloc_topology_t topology;
 	hwloc_cpuset_t cpuset;
+#endif
 };
 
 static void *testcase_trampoline(void *p)
@@ -117,10 +122,12 @@ static void *pre_trampoline(void *p)
 {
 	struct args *args = p;
 
+#if HAVE_HWLOC
 	if (use_affinity && hwloc_set_thread_cpubind(args->topology, pthread_self(), args->cpuset, 0) < 0) {
 		perror("hwloc_set_thread_cpubind");
 		exit(1);
 	}
+#endif
 
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -239,10 +246,13 @@ int main(int argc, char *argv[])
 	int opt_tasks = 1;
 	int opt_iterations = 0;
 	int iterations = 0;
-	int i, n;
+	int i;
 	char *m;
 	static unsigned long long *results[MAX_TASKS];
+#if HAVE_HWLOC
 	hwloc_topology_t topology;
+	int n;
+#endif
 	unsigned long long prev[MAX_TASKS] = {0, };
 	unsigned long long total = 0;
 	int fd[2];
@@ -303,6 +313,7 @@ int main(int argc, char *argv[])
 
 	testcase_prepare(opt_tasks);
 
+#if HAVE_HWLOC
 	hwloc_topology_init(&topology);
 	hwloc_topology_load(topology);
 
@@ -317,6 +328,7 @@ int main(int argc, char *argv[])
 		perror("hwloc_get_nbobjs_by_type");
 		exit(1);
 	}
+#endif
 
 	args = malloc(opt_tasks * sizeof(struct args));
 	if (!args) {
@@ -325,15 +337,17 @@ int main(int argc, char *argv[])
 	}
 
 	for (i = 0; i < opt_tasks; i++) {
+#if HAVE_HWLOC
 		hwloc_obj_t obj;
 		hwloc_cpuset_t old_cpuset;
 		int flags = 0;
-
+#endif
 		args[i].func = testcase;
 		args[i].arg1 = results[i];
 		args[i].arg2 = i;
 		args[i].poll_fd = fd[0];
 
+#if HAVE_HWLOC
 		obj = hwloc_get_obj_by_type(topology,
 				smt_affinity ? HWLOC_OBJ_PU : HWLOC_OBJ_CORE,
 				i % n);
@@ -365,15 +379,17 @@ int main(int argc, char *argv[])
 			perror("hwloc_set_cpubind");
 			exit(1);
 		}
-
+#endif
 		new_task_affinity(&args[i]);
 
+#ifdef HAVE_HWLOC
 		if (use_affinity && hwloc_set_cpubind(topology, old_cpuset, flags) < 0) {
 			perror("hwloc_set_cpubind");
 			exit(1);
 		}
 
 		hwloc_bitmap_free(old_cpuset);
+#endif
 	}
 
 	if (write(fd[1], &i, 1) != 1) {
@@ -381,8 +397,9 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+#if HAVE_HWLOC
 	hwloc_topology_destroy(topology);
-
+#endif
 	printf("testcase:%s\n", testcase_description);
 
 	printf("warmup\n");
@@ -426,10 +443,12 @@ int main(int argc, char *argv[])
 
 	kill_tasks();
 
+#if HAVE_HWLOC
 	for (i = 0; i < opt_tasks; i++) {
 		hwloc_bitmap_free(args[i].cpuset);
 		hwloc_topology_destroy(args[i].topology);
 	}
+#endif
 	free(args);
 
 	testcase_cleanup();
