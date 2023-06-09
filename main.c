@@ -256,6 +256,7 @@ static void sigint_handler(int sig)
 
 int main(int argc, char *argv[])
 {
+	int opt;
 	int opt_tasks = 1;
 	int opt_iterations = 0;
 	int iterations = 0;
@@ -273,12 +274,8 @@ int main(int argc, char *argv[])
 	struct args *args;
 	bool verbose = false;
 
-	while (1) {
-		signed char c = getopt(argc, argv, "mt:s:hvn");
-		if (c < 0)
-			break;
-
-		switch (c) {
+	while ((opt = getopt(argc, argv, "mt:s:hvn")) != -1) {
+		switch (opt) {
 			case 'm':
 				smt_affinity = true;
 				break;
