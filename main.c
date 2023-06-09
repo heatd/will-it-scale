@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
 
 	if (pipe(fd) == -1) {
 		perror("pipe");
-		exit(1);
+		return 1;
 	}
 
 	struct sigaction sa;
@@ -361,7 +361,7 @@ int main(int argc, char *argv[])
 
 	if (thread_controller < 0) {
 		perror("fork");
-		exit(1);
+		return 1;
 	} else if (thread_controller > 0) {
 		pid_t wpid = wait(NULL);
 		assert(wpid == thread_controller);
@@ -384,18 +384,18 @@ int main(int argc, char *argv[])
 	if (n == 0) {
 		printf("No Cores/PUs found. Try %s -m flag\n",
 		       smt_affinity ? "removing" : "adding");
-		exit(1);
+		return 1;
 	}
 	if (n < 1) {
 		perror("hwloc_get_nbobjs_by_type");
-		exit(1);
+		return 1;
 	}
 #endif
 
 	args = malloc(opt_tasks * sizeof(struct args));
 	if (!args) {
 		perror("malloc");
-		exit(1);
+		return 1;
 	}
 
 	for (i = 0; i < opt_tasks; i++) {
@@ -416,30 +416,30 @@ int main(int argc, char *argv[])
 
 		if (hwloc_topology_dup(&args[i].topology, topology)) {
 			perror("hwloc_topology_dup");
-			exit(1);
+			return 1;
 		}
 
 		if (!(args[i].cpuset = hwloc_bitmap_dup(obj->cpuset))) {
 			perror("hwloc_bitmap_dup");
-			exit(1);
+			return 1;
 		}
 
 		old_cpuset = hwloc_bitmap_alloc();
 		if (!old_cpuset) {
 			perror("hwloc_bitmap_alloc");
-			exit(1);
+			return 1;
 		}
 #ifdef THREADS
 		flags |= HWLOC_CPUBIND_THREAD;
 #endif
 		if (hwloc_get_cpubind(topology, old_cpuset, flags) < 0) {
 			perror("hwloc_get_cpubind");
-			exit(1);
+			return 1;
 		}
 
 		if (use_affinity && hwloc_set_cpubind(topology, obj->cpuset, flags) < 0) {
 			perror("hwloc_set_cpubind");
-			exit(1);
+			return 1;
 		}
 #endif
 		new_task_affinity(&args[i]);
@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
 #ifdef HAVE_HWLOC
 		if (use_affinity && hwloc_set_cpubind(topology, old_cpuset, flags) < 0) {
 			perror("hwloc_set_cpubind");
-			exit(1);
+			return 1;
 		}
 
 		hwloc_bitmap_free(old_cpuset);
@@ -456,7 +456,7 @@ int main(int argc, char *argv[])
 
 	if (write(fd[1], &i, 1) != 1) {
 		perror("write");
-		exit(1);
+		return 1;
 	}
 
 #if HAVE_HWLOC
@@ -500,7 +500,7 @@ int main(int argc, char *argv[])
 		    (iterations > (opt_iterations + WARMUP_ITERATIONS))) {
 			printf("average:%llu\n", total / opt_iterations);
 #ifdef THREADS
-			exit(0);
+			return 0;
 #else
 			break;
 #endif
@@ -521,5 +521,5 @@ out:
 #endif
 
 	testcase_cleanup();
-	exit(0);
+	return 0;
 }
