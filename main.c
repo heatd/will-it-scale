@@ -113,6 +113,8 @@ static bool use_affinity = true;
 static pthread_t threads[2*MAX_TASKS];
 static int nr_threads;
 
+static pid_t thread_controller = 0;
+
 void new_task(void *(func)(void *), void *arg)
 {
 	pthread_create(&threads[nr_threads++], NULL, func, arg);
@@ -313,6 +315,19 @@ int main(int argc, char *argv[])
 
 	testcase_prepare(opt_tasks);
 
+#ifdef THREADS
+	thread_controller = fork();
+
+	if (thread_controller < 0) {
+		perror("fork");
+		exit(1);
+	} else if (thread_controller > 0) {
+		pid_t wpid = wait(NULL);
+		assert(wpid == thread_controller);
+		goto out;
+	}
+#endif
+
 #if HAVE_HWLOC
 	hwloc_topology_init(&topology);
 	hwloc_topology_load(topology);
@@ -437,7 +452,11 @@ int main(int argc, char *argv[])
 		if (opt_iterations &&
 		    (iterations > (opt_iterations + WARMUP_ITERATIONS))) {
 			printf("average:%llu\n", total / opt_iterations);
+#ifdef THREADS
+			exit(0);
+#else
 			break;
+#endif
 		}
 	}
 
@@ -450,6 +469,9 @@ int main(int argc, char *argv[])
 	}
 #endif
 	free(args);
+#ifdef THREADS
+out:
+#endif
 
 	testcase_cleanup();
 	exit(0);
