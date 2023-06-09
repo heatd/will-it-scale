@@ -24,6 +24,10 @@
 #include <sys/wait.h>
 #include <errno.h>
 
+#if HAVE_GETOPT_LONG
+#include <getopt.h>
+#endif
+
 #define MAX_TASKS 2048
 #define MAX_CACHELINE_SIZE 256
 #define WARMUP_ITERATIONS 5
@@ -72,10 +76,13 @@ static char *initialise_shared_area(unsigned long size)
 static void usage(char *command)
 {
 	printf("Usage: %s [options]\n\n", command);
-	printf("\t-s iterations\tNumber of iterations to run\n");
-	printf("\t-t tasks\tNumber of threads or processes to run\n");
-	printf("\t-m\t\tAffinitize tasks on SMT threads (default cores)\n");
-	printf("\t-n\t\tNo affinity\n");
+	printf("\t-s, --iterations ITERATIONS\tNumber of iterations to run\n");
+	printf("\t-t, --tasks TASKS\t\tNumber of threads or processes to run\n");
+	printf("\t-m, --smt-affinitize\t\tAffinitize tasks on SMT threads (default cores)\n");
+	printf("\t-n, --no-affinity\t\tNo affinity\n");
+#if !HAVE_GETOPT_LONG
+	printf("Note: This platform does not support long options\n");
+#endif
 	exit(1);
 }
 
@@ -254,6 +261,21 @@ static void sigint_handler(int sig)
 #endif
 }
 
+#if HAVE_GETOPT_LONG
+static const struct option long_options[] = {
+    {"help", no_argument, NULL, 'h'},
+	{"iterations", required_argument, NULL, 's'},
+	{"tasks", required_argument, NULL, 't'},
+	{"smt-affinitize", no_argument, NULL, 'm'},
+	{"no-affinity", no_argument, NULL, 'n'},
+	{}
+};
+
+#define GETOPT(argc, argv, shortopts) getopt_long((argc), (argv), (shortopts), long_options, NULL)
+#else
+#define GETOPT(argc, argv, shortopts) getopt((argc), (argv), (shortopts))
+#endif
+
 int main(int argc, char *argv[])
 {
 	int opt;
@@ -274,7 +296,7 @@ int main(int argc, char *argv[])
 	struct args *args;
 	bool verbose = false;
 
-	while ((opt = getopt(argc, argv, "mt:s:hvn")) != -1) {
+	while ((opt = GETOPT(argc, argv, "mt:s:hvn")) != -1) {
 		switch (opt) {
 			case 'm':
 				smt_affinity = true;
@@ -285,7 +307,12 @@ int main(int argc, char *argv[])
 				if (opt_tasks > MAX_TASKS) {
 					printf("tasks cannot exceed %d\n",
 					       MAX_TASKS);
-					exit(1);
+					return 1;
+				}
+
+				if (opt_tasks == 0) {
+					printf("tasks cannot be 0\n");
+					return 1;
 				}
 				break;
 
