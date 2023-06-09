@@ -243,6 +243,17 @@ static void kill_tasks(void)
 }
 #endif
 
+static sig_atomic_t should_bail = 0;
+
+static void sigint_handler(int sig)
+{
+#ifdef THREADS
+	kill(thread_controller, SIGTERM);
+#else
+	should_bail = 1;
+#endif
+}
+
 int main(int argc, char *argv[])
 {
 	int opt_tasks = 1;
@@ -313,6 +324,12 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	struct sigaction sa;
+	sa.sa_flags = SA_RESTART;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_handler = sigint_handler;
+	sigaction(SIGINT, &sa, NULL);
+
 	testcase_prepare(opt_tasks);
 
 #ifdef THREADS
@@ -325,6 +342,12 @@ int main(int argc, char *argv[])
 		pid_t wpid = wait(NULL);
 		assert(wpid == thread_controller);
 		goto out;
+	} else {
+		/* We don't need to handle SIGINT here, it's counterproductive even,
+		 * as tty semantics send SIGINT to every process in the process group.
+		 */
+		sa.sa_handler = SIG_IGN;
+		sigaction(SIGINT, &sa, NULL);
 	}
 #endif
 
@@ -419,7 +442,7 @@ int main(int argc, char *argv[])
 
 	printf("warmup\n");
 
-	while (1) {
+	while (!should_bail) {
 		unsigned long long sum = 0, min = -1ULL, max = 0;
 
 		sleep(1);
