@@ -116,6 +116,7 @@ static bool use_affinity = true;
 #ifdef THREADS
 
 #include <pthread.h>
+#include <assert.h>
 
 static pthread_t threads[2*MAX_TASKS];
 static int nr_threads;
